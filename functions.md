@@ -370,167 +370,256 @@ func main() {
 
 ## Defer Statement
 
-In Go, the defer keyword defers the execution of a function until the surrounding function returns. This mechanism is crucial for handling cleanup operations such as closing files, releasing resources, or logging activities. Deferred calls execute in a Last-In-First-Out (LIFO) order, ensuring systematic resource management.
+In Go, the defer keyword defers the execution of a function until the surrounding function returns. This mechanism is crucial for handling cleanup operations such as closing files, releasing resources, or logging activities.
 
 ```go
+package main
+
+import "fmt"
+
 func fetchData() {
-    defer fmt.Println("Closing database connection")
-    fmt.Println("Fetching data from database")
+    fmt.Println("📡 Connecting to database...")
+    defer fmt.Println("🔒 Closing database connection")
+
+    fmt.Println("📊 Fetching data from database...")
+    fmt.Println("✅ Data fetch complete.")
 }
 
-fetchData()
-// Output:
-// Fetching data from database
-// Closing database connection
+func main() {
+    fetchData()
+}
+
+// Expected Output:
+// 📡 Connecting to database...
+// 📊 Fetching data from database...
+// ✅ Data fetch complete.
+// 🔒 Closing database connection
+
 ```
 
-### Resource Management
+### Example: Resource Management
 
 Using defer ensures that resources like files and network connections are properly closed.
 
 ```go
 package main
+
 import (
-    "fmt"
-    "os"
+	"fmt"
+	"io"
+	"os"
 )
 
 func handleFile(filename string) {
-    file, err := os.Open(filename)
-    if err != nil {
-        fmt.Println("File open error:", err)
-        return
-    }
-    defer file.Close()
-    fmt.Println("Processing", filename)
+	fmt.Println("Attempting to open file:", filename)
+
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println("❌ Error opening file:", err)
+		return
+	}
+
+	// Ensure file is closed after function execution
+	defer func() {
+		fmt.Println("Closing file:", filename)
+		err := file.Close()
+		if err != nil {
+			fmt.Println("❌ Error closing file:", err)
+			return
+		}
+		fmt.Println("✅ File closed successfully. Defer ensures resource cleanup even after an early return.")
+	}()
+
+	fmt.Println("✅ File opened successfully:", filename)
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		fmt.Println("❌ Error reading file content:", err)
+		return
+	}
+
+	fmt.Println("📄 File Content:\n", string(content))
+	fmt.Println("Processing", filename, "completed successfully!")
 }
 
-handleFile("config.yaml")
+func main() {
+	handleFile("README.md")
+}
 
-// Even if an error occurs during file processing, the deferred file.Close() ensures resource release.
+// Expected Output:
+// Attempting to open file: README.md
+// ✅ File opened successfully: README.md
+// 📄 File Content:
+// (content of the file)
+// Processing README.md completed successfully!
+// Closing file: README.md
+// ✅ File closed successfully. Defer ensures resource cleanup even after an early return.
+
 ```
 
-### Error Recovery
+### Example: Error Recovery
 
 `defer` helps maintain program stability and consistency during unexpected runtime errors.
 
 ```go
 package main
+
 import "fmt"
 
-func handlePanic() {
+func safeExecution() {
     defer func() {
-        if r := recover(); r != nil {
-            fmt.Println("Recovered:", r)
+        if err := recover(); err != nil {
+            fmt.Println("⚠️ Recovered from panic:", err)
         }
     }()
+    fmt.Println("🚀 Executing function...")
     panic("Unexpected error!")
 }
 
-handlePanic()
-fmt.Println("Continuing execution...")
+func main() {
+    safeExecution()
+    fmt.Println("✅ Program continues execution...")
+}
 
-// Output:
-// Recovered: Unexpected error!
-// Continuing execution...
+// Expected Output:
+// 🚀 Executing function...
+// ⚠️ Recovered from panic: Unexpected error!
+// ✅ Program continues execution...
 ```
-### Execution Sequence
+
+### Example: Function Tracing and Benchmarking
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+	"runtime"
+	"time"
+)
+
+func measureExecution(fn interface{}) {
+	fnValue := reflect.ValueOf(fn)
+	fnName := runtime.FuncForPC(fnValue.Pointer()).Name()
+
+	start := time.Now()
+	fmt.Println("⚡ Pikachu is preparing:", fnName)
+	defer func() {
+		fmt.Println("⚡ Pikachu finished:", fnName)
+		fmt.Printf("⏱️ Execution time: %v\n", time.Since(start))
+	}()
+
+	fnValue.Call(nil) // Call the function
+}
+
+func thunderbolt() {
+	fmt.Println("⚡ Pikachu used Thunderbolt! It's super effective!")
+	time.Sleep(2 * time.Second)
+}
+
+func main() {
+	measureExecution(thunderbolt)
+}
+
+// Expected Output:
+//⚡ Pikachu is preparing: main.thunderbolt
+//⚡ Pikachu used Thunderbolt! It's super effective!
+//⚡ Pikachu finished: main.thunderbolt
+//⏱️ Execution time: 2.0008315s
+```
+
+### Example: Transaction Handling
+defer can be used to commit or rollback database transactions.
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func manageTransaction(shouldCommit bool) {
+	fmt.Println("🔄 Starting transaction...")
+
+	defer func() {
+		if shouldCommit {
+			fmt.Println("✅ Transaction committed.")
+		} else {
+			fmt.Println("❌ Transaction rolled back.")
+		}
+	}()
+
+	fmt.Println("⚙️ Processing transaction...")
+
+	if !shouldCommit {
+		fmt.Println("❗ Error: Transaction failed.")
+		return
+	}
+
+	fmt.Println("🎯 Transaction processed successfully.")
+}
+
+func main() {
+	fmt.Println("Attempting failed transaction:")
+	manageTransaction(false)
+
+	fmt.Println("\nAttempting successful transaction:")
+	manageTransaction(true)
+}
+
+// Expected Output:
+// Attempting failed transaction:
+// 🔄 Starting transaction...
+// ⚙️ Processing transaction...
+// ❗ Error: Transaction failed.
+// ❌ Transaction rolled back.
+
+// Attempting successful transaction:
+// 🔄 Starting transaction...
+// ⚙️ Processing transaction...
+// 🎯 Transaction processed successfully.
+// ✅ Transaction committed.
+```
+
+### Defer Execution Sequence
 
 Multiple defer statements follow **LIFO** order, ensuring predictable cleanup sequencing.
 
 ```go
 package main
+
 import "fmt"
 
-func sequence() {
-    defer fmt.Println("Step 1: Finalization")
-    defer fmt.Println("Step 2: Cleanup")
-    fmt.Println("Executing main logic")
+func demonstrateDeferOrder() {
+    defer fmt.Println("🔚 Step 1: Finalization")
+    defer fmt.Println("🧹 Step 2: Cleanup")
+    fmt.Println("🚀 Executing main logic")
 }
 
-sequence()
-
-// Output:
-// Executing main logic
-// Step 2: Cleanup
-// Step 1: Finalization
-
-func orderWithDefer() {
+func deferLoopOrder() {
+    fmt.Println("🔄 Deferring numbers in reverse order:")
     for i := 1; i <= 5; i++ {
         defer fmt.Printf("%d ", i)
     }
+    fmt.Println()
 }
 
-orderWithDefer()
-```
+func main() {
+    demonstrateDeferOrder()
+    fmt.Println()
 
-### Execution Tracing
-
-Tracing function execution can be simplified using defer for logging entry and exit points.
-
-```go
-package main
-import "fmt"
-
-func logExecution(fnName string) {
-    fmt.Println("Start:", fnName)
-    defer fmt.Println("End:", fnName)
-    fmt.Println("Running", fnName)
+    deferLoopOrder()
+    fmt.Println("\n✅ Execution completed.")
 }
 
-logExecution("operationX")
+// Expected Output:
+// 🚀 Executing main logic
+// 🧹 Step 2: Cleanup
+// 🔚 Step 1: Finalization
 
-// Output:
-// Start: operationX
-// Running operationX
-// End: operationX
+// 🔄 Deferring numbers in reverse order:
+// 5 4 3 2 1 
+// ✅ Execution completed.
 ```
 
-### Benchmarking Execution Time
-
-Using defer to measure function execution time for performance analysis.
-
-```go
-package main
-import (
-    "fmt"
-    "time"
-)
-
-func measureExecution() {
-    start := time.Now()
-    defer func() {
-        fmt.Println("Execution time:", time.Since(start))
-    }()
-    time.Sleep(2 * time.Second)
-}
-
-measureExecution()
-
-// Output:
-// Execution time: 2s
-```
-### Transaction Handling
-defer can be used to commit or rollback database transactions.
-
-```go
-package main
-import "fmt"
-
-func manageTransaction(success bool) {
-    defer func() {
-        if success {
-            fmt.Println("Transaction committed")
-        } else {
-            fmt.Println("Transaction rolled back")
-        }
-    }()
-    fmt.Println("Processing transaction")
-}
-
-manageTransaction(false)
-
-// Output:
-// Processing transaction
-// Transaction rolled back
-```
